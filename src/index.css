@@ -1,0 +1,27 @@
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Nunito', ui-rounded, 'Segoe UI', sans-serif;
+  background: #131218;
+  color: #f8f8f0;
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  width: 100vw;
+  height: 100vh;
+}
+
+a {
+  color: #81eeff;
+}
+a:hover {
+  color: #a3f3ff;
+}
