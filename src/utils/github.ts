@@ -16,14 +16,9 @@ export async function fetchRepositoryFiles(
   branch: string = 'main',
   path: string = ''
 ): Promise<{ files: HardwareFile[], resolverMap: Map<string, string> }> {
-  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/git/trees/${branch}?recursive=1`;
-  const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
-  }
-
-  const data = await response.json();
+  const normalizedPath = path.replace(/^\/+|\/+$/g, '');
+  const resolved = await resolveTreeForBranchAndPath(owner, repo, branch, normalizedPath);
+  const data = resolved.data;
   const files: HardwareFile[] = [];
   const resolverMap = new Map<string, string>();
 
@@ -34,14 +29,17 @@ export async function fetchRepositoryFiles(
   for (const item of data.tree) {
     if (item.type !== 'blob') continue;
 
-    // If a sub-path was specified, only include files under it
-    if (path && !item.path.startsWith(path)) continue;
-
-    const rawUrl = `${GITHUB_RAW_BASE}/${owner}/${repo}/${branch}/${item.path}`;
+    const rawUrl = `${GITHUB_RAW_BASE}/${owner}/${repo}/${encodeURIComponent(
+      resolved.branch
+    )}/${item.path}`;
     const name = item.path.split('/').pop()!;
 
+    // Always populate resolver map for all repo blobs so KiCad cross-file references can resolve.
     resolverMap.set(item.path, rawUrl);
     resolverMap.set(name, rawUrl);
+
+    // If a sub-path was specified, only include files under it
+    if (resolved.path && !item.path.startsWith(resolved.path)) continue;
 
     const ext = getFileExtension(name);
     if (ext && SUPPORTED_EXTENSIONS.includes(ext)) {
@@ -70,11 +68,79 @@ export async function fetchRepositoryFiles(
   return { files, resolverMap };
 }
 
+async function resolveTreeForBranchAndPath(
+  owner: string,
+  repo: string,
+  branch: string,
+  path: string
+): Promise<{ branch: string; path: string; data: any }> {
+  const attempts: Array<{ branch: string; path: string }> = [{ branch, path }];
+
+  // Handle branch names containing '/' when URL parsing split them into path.
+  if (path) {
+    const parts = path.split('/').filter(Boolean);
+    for (let i = 1; i < parts.length; i++) {
+      attempts.push({
+        branch: `${branch}/${parts.slice(0, i).join('/')}`,
+        path: parts.slice(i).join('/'),
+      });
+    }
+  }
+
+  const defaultBranch = await fetchDefaultBranch(owner, repo);
+  if (defaultBranch && !attempts.some((attempt) => attempt.branch === defaultBranch)) {
+    attempts.push({ branch: defaultBranch, path });
+  }
+  if (!attempts.some((attempt) => attempt.branch === 'master')) {
+    attempts.push({ branch: 'master', path });
+  }
+  if (!attempts.some((attempt) => attempt.branch === 'main')) {
+    attempts.push({ branch: 'main', path });
+  }
+
+  let lastError: Error | null = null;
+  for (const attempt of attempts) {
+    try {
+      const data = await fetchGitTree(owner, repo, attempt.branch);
+      return { branch: attempt.branch, path: attempt.path, data };
+    } catch (error) {
+      lastError = error as Error;
+    }
+  }
+
+  throw lastError ?? new Error('Failed to resolve repository tree');
+}
+
+async function fetchGitTree(owner: string, repo: string, branch: string): Promise<any> {
+  const url = `${GITHUB_API_BASE}/repos/${owner}/${repo}/git/trees/${encodeURIComponent(
+    branch
+  )}?recursive=1`;
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`GitHub API error: ${response.status} ${response.statusText}`);
+  }
+
+  return response.json();
+}
+
+async function fetchDefaultBranch(owner: string, repo: string): Promise<string | null> {
+  try {
+    const response = await fetch(`${GITHUB_API_BASE}/repos/${owner}/${repo}`);
+    if (!response.ok) return null;
+    const data = await response.json();
+    return typeof data?.default_branch === 'string' ? data.default_branch : null;
+  } catch {
+    return null;
+  }
+}
+
 export async function fetchFileContent(
   url: string,
-  onProgress?: (loaded: number, total: number) => void
+  onProgress?: (loaded: number, total: number) => void,
+  signal?: AbortSignal
 ): Promise<ArrayBuffer> {
-  const response = await fetch(url);
+  const response = await fetch(url, { signal });
   if (!response.ok) {
     throw new Error(`Failed to fetch file: ${response.status} ${response.statusText}`);
   }
@@ -113,6 +179,7 @@ export async function fetchFileContent(
             'Content-Type': 'application/vnd.git-lfs+json',
             Accept: 'application/vnd.git-lfs+json',
           },
+          signal,
           body: JSON.stringify({
             operation: 'download',
             transfers: ['basic'],
@@ -134,10 +201,10 @@ export async function fetchFileContent(
         throw new Error('LFS batch API did not return a download URL');
       }
 
-      return streamResponse(await fetch(downloadUrl), size, onProgress);
+      return streamResponse(await fetch(downloadUrl, { signal }), size, onProgress);
     }
 
-    // Not an LFS pointer – convert the already-read text back to an ArrayBuffer
+    // Not an LFS pointer - convert the already-read text back to an ArrayBuffer
     return new TextEncoder().encode(text).buffer as ArrayBuffer;
   }
 
@@ -158,24 +225,62 @@ async function streamResponse(
   }
 
   const reader = response.body.getReader();
-  const chunks: Uint8Array[] = [];
   let loaded = 0;
+
+  // Fast path for known-size payloads: one allocation, no chunk re-copy.
+  if (total > 0) {
+    let result = new Uint8Array(total);
+
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+
+      // Some responses report compressed content-length but stream decompressed bytes.
+      // Grow buffer when actual payload exceeds reported size.
+      if (loaded + value.byteLength > result.length) {
+        const required = loaded + value.byteLength;
+        const nextLength = Math.max(result.length * 2, required);
+        const grown = new Uint8Array(nextLength);
+        grown.set(result, 0);
+        result = grown;
+      }
+
+      result.set(value, loaded);
+      loaded += value.byteLength;
+      onProgress(loaded, Math.max(total, loaded));
+    }
+
+    if (loaded === total) {
+      return result.buffer as ArrayBuffer;
+    }
+
+    return result.slice(0, loaded).buffer as ArrayBuffer;
+  }
+
+  // Unknown payload size: grow a single buffer instead of storing all chunks,
+  // which reduces peak memory for very large files.
+  let capacity = 1024 * 1024;
+  let result = new Uint8Array(capacity);
 
   for (;;) {
     const { done, value } = await reader.read();
     if (done) break;
-    chunks.push(value);
+
+    if (loaded + value.byteLength > capacity) {
+      while (loaded + value.byteLength > capacity) {
+        capacity *= 2;
+      }
+      const grown = new Uint8Array(capacity);
+      grown.set(result, 0);
+      result = grown;
+    }
+
+    result.set(value, loaded);
     loaded += value.byteLength;
-    onProgress(loaded, total);
+    onProgress(loaded, loaded);
   }
 
-  const result = new Uint8Array(loaded);
-  let offset = 0;
-  for (const chunk of chunks) {
-    result.set(chunk, offset);
-    offset += chunk.byteLength;
-  }
-  return result.buffer as ArrayBuffer;
+  return result.slice(0, loaded).buffer as ArrayBuffer;
 }
 
 function getFileExtension(filename: string): string | null {

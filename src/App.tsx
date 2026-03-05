@@ -10,7 +10,14 @@ import { useStore } from './store/useStore';
 import './App.css';
 
 function App() {
-  const { files, selectedFile, setSelectedFile, resolverMap } = useStore();
+  const {
+    files,
+    selectedFile,
+    setSelectedFile,
+    resolverMap,
+    performanceMode,
+    togglePerformanceMode,
+  } = useStore();
   const [showViewer, setShowViewer] = useState(false);
 
   useEffect(() => {
@@ -33,6 +40,13 @@ function App() {
       <header className="app-header">
         <span className="logo">HURT</span>
         <UrlInput />
+        <button
+          className={`perf-toggle ${performanceMode ? 'enabled' : ''}`}
+          onClick={togglePerformanceMode}
+          title="Reduce rendering quality for faster loading and smoother interaction on large models"
+        >
+          Performance {performanceMode ? 'ON' : 'OFF'}
+        </button>
       </header>
 
       <div className="app-content">

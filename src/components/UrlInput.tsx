@@ -20,6 +20,8 @@ export default function UrlInput() {
   // Auto-paste detection
   useEffect(() => {
     const handlePaste = async (e: ClipboardEvent) => {
+      if (e.defaultPrevented) return;
+
       // Only auto-paste if no input is focused
       if (document.activeElement?.tagName === 'INPUT' || 
           document.activeElement?.tagName === 'TEXTAREA') {
@@ -92,9 +94,10 @@ export default function UrlInput() {
   const handleInputPaste = async (e: React.ClipboardEvent) => {
     const pastedText = e.clipboardData?.getData('text');
     if (pastedText && isGithubUrl(pastedText)) {
+      e.preventDefault();
+      e.stopPropagation();
       setInputValue(pastedText);
-      // Small delay to ensure state updates
-      setTimeout(() => handleSubmit(pastedText), 0);
+      await handleSubmit(pastedText);
     }
   };
 

@@ -48,6 +48,14 @@ export default function LandingPage({ onLoaded }: { onLoaded: () => void }) {
 
   useEffect(() => {
     const handlePaste = (e: ClipboardEvent) => {
+      if (e.defaultPrevented) return;
+      if (
+        document.activeElement?.tagName === 'INPUT' ||
+        document.activeElement?.tagName === 'TEXTAREA'
+      ) {
+        return;
+      }
+
       const text = e.clipboardData?.getData('text');
       if (text && isGithubUrl(text)) {
         setInputValue(text);
@@ -75,8 +83,10 @@ export default function LandingPage({ onLoaded }: { onLoaded: () => void }) {
           onPaste={(e) => {
             const text = e.clipboardData.getData('text');
             if (text && isGithubUrl(text)) {
+              e.preventDefault();
+              e.stopPropagation();
               setInputValue(text);
-              setTimeout(() => loadRepo(text), 0);
+              loadRepo(text);
             }
           }}
           disabled={isLoading}

@@ -51,6 +51,7 @@ interface AppState {
   selectedComponents: string[];
   showEdges: boolean;
   loadProgress: number;
+  performanceMode: boolean;
   
   // Actions
   setGithubUrl: (url: string) => void;
@@ -66,6 +67,7 @@ interface AppState {
   deselectAllComponents: () => void;
   setLoadProgress: (progress: number) => void;
   toggleEdges: () => void;
+  togglePerformanceMode: () => void;
   reset: () => void;
 }
 
@@ -85,6 +87,7 @@ export const useStore = create<AppState>((set) => ({
   selectedComponents: [],
   showEdges: true,
   loadProgress: 0,
+  performanceMode: false,
   
   // Actions
   setGithubUrl: (url: string) => {
@@ -141,6 +144,9 @@ export const useStore = create<AppState>((set) => ({
   setLoadProgress: (progress: number) => set({ loadProgress: progress }),
   
   toggleEdges: () => set((state) => ({ showEdges: !state.showEdges })),
+
+  togglePerformanceMode: () =>
+    set((state) => ({ performanceMode: !state.performanceMode })),
   
   reset: () => set({
     githubUrl: '',
@@ -156,7 +162,8 @@ export const useStore = create<AppState>((set) => ({
     modelComponents: [],
     selectedComponents: [],
     showEdges: true,
-    loadProgress: 0
+    loadProgress: 0,
+    performanceMode: false
   })
 }));
 
