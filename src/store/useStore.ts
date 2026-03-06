@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import * as THREE from 'three';
 
-export type HardwareFileKind = 'model' | 'kicad';
+export type HardwareFileKind = 'model' | 'kicad' | 'easyeda';
 
 export interface ModelFileData {
   kind: 'model';
@@ -21,7 +21,16 @@ export interface KiCadFileData {
   size?: number;
 }
 
-export type HardwareFile = ModelFileData | KiCadFileData;
+export interface EasyEdaFileData {
+  kind: 'easyeda';
+  name: string;
+  path: string;
+  url: string;
+  type: 'easyeda_json' | 'easyeda_epro' | 'easyeda_zip';
+  size?: number;
+}
+
+export type HardwareFile = ModelFileData | KiCadFileData | EasyEdaFileData;
 
 export interface ModelComponent {
   id: string;

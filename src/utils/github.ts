@@ -1,10 +1,16 @@
-import type { HardwareFile, ModelFileData, KiCadFileData } from '../store/useStore';
+import type {
+  HardwareFile,
+  ModelFileData,
+  KiCadFileData,
+  EasyEdaFileData,
+} from '../store/useStore';
 
 const GITHUB_API_BASE = 'https://api.github.com';
 const GITHUB_RAW_BASE = 'https://raw.githubusercontent.com';
 const MODEL_EXTENSIONS = ['.stl', '.step', '.stp', '.obj', '.gltf', '.glb', '.ply', '.3mf'];
 const KICAD_EXTENSIONS = ['.kicad_sch', '.kicad_pcb', '.kicad_prj', '.kicad_wks'];
-const SUPPORTED_EXTENSIONS = [...MODEL_EXTENSIONS, ...KICAD_EXTENSIONS];
+const EASYEDA_EXTENSIONS = ['.json', '.epro', '.zip'];
+const SUPPORTED_EXTENSIONS = [...MODEL_EXTENSIONS, ...KICAD_EXTENSIONS, ...EASYEDA_EXTENSIONS];
 
 /**
  * Fetch all files from a GitHub repo using the Git Trees API (single request).
@@ -51,6 +57,15 @@ export async function fetchRepositoryFiles(
           url: rawUrl,
           type: ext.slice(1) as KiCadFileData['type'],
           size: item.size
+        });
+      } else if (EASYEDA_EXTENSIONS.includes(ext)) {
+        files.push({
+          kind: 'easyeda',
+          name,
+          path: item.path,
+          url: rawUrl,
+          type: mapEasyEdaType(ext),
+          size: item.size,
         });
       } else {
         files.push({
@@ -286,6 +301,19 @@ async function streamResponse(
 function getFileExtension(filename: string): string | null {
   const match = filename.match(/\.[^.]+$/);
   return match ? match[0].toLowerCase() : null;
+}
+
+function mapEasyEdaType(ext: string): EasyEdaFileData['type'] {
+  switch (ext) {
+    case '.json':
+      return 'easyeda_json';
+    case '.epro':
+      return 'easyeda_epro';
+    case '.zip':
+      return 'easyeda_zip';
+    default:
+      return 'easyeda_json';
+  }
 }
 
 export function isGithubUrl(url: string): boolean {

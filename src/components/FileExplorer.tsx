@@ -28,10 +28,29 @@ export default function FileExplorer() {
       kicad_sch: Cpu,
       kicad_pcb: Cpu,
       kicad_prj: FolderOpen,
-      kicad_wks: FileText
+      kicad_wks: FileText,
+      easyeda_json: FileText,
+      easyeda_epro: FolderOpen,
+      easyeda_zip: FolderOpen
     };
     const IconComponent = iconMap[type] || File;
     return <IconComponent size={18} />;
+  };
+
+  const getFileKindLabel = (kind: string) => {
+    if (kind === 'model') return '3D Model';
+    if (kind === 'kicad') return 'KiCad';
+    if (kind === 'easyeda') return 'EasyEDA';
+    return kind;
+  };
+
+  const getFileTypeLabel = (type: string) => {
+    const labels: Record<string, string> = {
+      easyeda_json: 'JSON',
+      easyeda_epro: 'EPRO',
+      easyeda_zip: 'ZIP'
+    };
+    return (labels[type] ?? type).toUpperCase();
   };
 
   return (
@@ -51,8 +70,8 @@ export default function FileExplorer() {
             <div className="file-info">
               <div className="file-name">{file.name}</div>
               <div className="file-meta">
-                <span className="file-kind">{file.kind === 'kicad' ? 'KiCad' : '3D Model'}</span>
-                <span className="file-type">{file.type.toUpperCase()}</span>
+                <span className="file-kind">{getFileKindLabel(file.kind)}</span>
+                <span className="file-type">{getFileTypeLabel(file.type)}</span>
                 <span className="file-size">{formatFileSize(file.size)}</span>
               </div>
             </div>

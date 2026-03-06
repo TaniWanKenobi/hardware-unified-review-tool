@@ -428,6 +428,91 @@
   font-size: 0.85rem;
 }
 
+.easyeda-viewer-loading,
+.easyeda-viewer-error {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  color: var(--fg-muted);
+  font-size: 0.85rem;
+}
+
+.easyeda-viewer {
+  width: 100%;
+  height: 100%;
+  overflow: auto;
+  padding: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+}
+
+.easyeda-summary h3 {
+  font-size: 1rem;
+  margin-bottom: 0.35rem;
+}
+
+.easyeda-summary p {
+  font-size: 0.82rem;
+  color: var(--fg-muted);
+  margin-bottom: 0.25rem;
+}
+
+.easyeda-muted {
+  font-size: 0.75rem !important;
+  color: var(--fg-muted) !important;
+}
+
+.easyeda-json-preview {
+  margin-top: 0.75rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  padding: 0.75rem;
+  background: var(--bg-panel);
+  color: var(--fg);
+  font-size: 0.75rem;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.easyeda-entry-list {
+  margin-top: 0.85rem;
+  border: 1px solid var(--border);
+  border-radius: 0.35rem;
+  overflow: hidden;
+}
+
+.easyeda-entry-row {
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 0.75rem;
+  align-items: center;
+  padding: 0.45rem 0.65rem;
+  font-size: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.easyeda-entry-row:last-child {
+  border-bottom: none;
+}
+
+.easyeda-entry-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.easyeda-entry-kind,
+.easyeda-entry-size {
+  color: var(--fg-muted);
+  white-space: nowrap;
+}
+
 /* ── Material Editor ── */
 
 .material-editor {

@@ -72,7 +72,7 @@ export default function LandingPage({ onLoaded }: { onLoaded: () => void }) {
         <h1>HURT</h1>
         <p>
           An <strong>interactive</strong>, <strong>browser-based</strong> viewer
-          for 3D models and KiCad schematics &amp; boards from GitHub.
+          for 3D models, KiCad files, and EasyEDA files from GitHub.
         </p>
         <input
           type="text"
@@ -97,7 +97,8 @@ export default function LandingPage({ onLoaded }: { onLoaded: () => void }) {
         <p className="landing-note">
           or drag &amp; drop files directly onto the page.
           <br />
-          Supports STL, STEP, OBJ, GLTF, PLY, 3MF, KiCad schematics &amp; PCBs.
+          Supports STL, STEP, OBJ, GLTF, PLY, 3MF, KiCad files, and EasyEDA
+          (.json/.epro/.zip).
         </p>
       </div>
     </div>

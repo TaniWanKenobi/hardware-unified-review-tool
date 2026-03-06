@@ -19,7 +19,7 @@
   <h3>HURT</h3>
   <p>
     <strong>Hardware Unified Review Tool</strong><br />
-    A browser-based reviewer for 3D CAD and KiCad files directly from GitHub repositories.
+    A browser-based reviewer for 3D CAD, KiCad, and EasyEDA files directly from GitHub repositories.
   </p>
 </div>
 
@@ -46,6 +46,7 @@ HURT loads a GitHub repository URL, discovers supported hardware files, and rend
 It combines:
 - a high-performance 3D model viewer path for CAD formats
 - an embedded KiCad viewer for schematics and PCBs
+- an EasyEDA reader for Standard JSON files and Pro archives
 - file-level and component-level navigation for hardware review workflows
 
 ### Built With
@@ -97,6 +98,10 @@ It combines:
   - In-app schematic/PCB viewing with KiCanvas.
   - Cross-file resolution for linked KiCad project files.
 
+- EasyEDA support
+  - Standard Edition JSON file reading (`.json`) for schematic/PCB/library data.
+  - Pro Edition archive inspection (`.epro`, `.zip`) with entry listing and JSON doc detection.
+
 - Large-file resilience
   - STEP server conversion path plus worker fallback.
   - Adaptive preview decimation for very large STEP geometry.
@@ -134,6 +139,13 @@ It combines:
 | PCB | `.kicad_pcb` |
 | Project | `.kicad_prj` |
 | Worksheet | `.kicad_wks` |
+
+### EasyEDA Files
+
+| Type | Extensions |
+| --- | --- |
+| Standard Edition | `.json` |
+| Pro Edition Archives | `.epro`, `.zip` |
 
 ## Large File / STEP Performance
 
@@ -208,8 +220,10 @@ public/
 src/
   components/
     App + Viewer UI
+    EasyEdaViewer.tsx     # EasyEDA JSON/EPRO/ZIP reader
   utils/
     github.ts             # GitHub file discovery + streaming fetch + LFS support
+    easyeda.ts            # EasyEDA JSON heuristics + ZIP archive inspection
     modelLoader.ts        # Loader orchestration for all model types
     stepCache.ts          # IndexedDB STEP cache
     loadMetrics.ts        # ETA estimation metrics

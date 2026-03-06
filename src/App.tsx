@@ -4,6 +4,7 @@ import FileExplorer from './components/FileExplorer';
 import ComponentTree from './components/ComponentTree';
 import ModelViewer from './components/ModelViewer';
 import KiCadViewer from './components/KiCadViewer';
+import EasyEdaViewer from './components/EasyEdaViewer';
 import LoadingOverlay from './components/LoadingOverlay';
 import LandingPage from './components/LandingPage';
 import { useStore } from './store/useStore';
@@ -61,6 +62,8 @@ function App() {
           {selectedFile ? (
             selectedFile.kind === 'kicad' ? (
               <KiCadViewer fileUrl={selectedFile.url} resolverMap={resolverMap} />
+            ) : selectedFile.kind === 'easyeda' ? (
+              <EasyEdaViewer file={selectedFile} />
             ) : (
               <ModelViewer />
             )
