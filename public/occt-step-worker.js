@@ -115,7 +115,6 @@ self.onmessage = async (event) => {
     const meshes = Array.isArray(result?.meshes) ? result.meshes : [];
     const rawMeshes = meshes.map((mesh, index) => ({
       name: mesh?.name || `Part ${index + 1}`,
-      color: mesh?.color,
       position: toFloat32Array(mesh?.attributes?.position?.array),
       normal: toFloat32Array(mesh?.attributes?.normal?.array),
       index: toUint32Array(mesh?.index?.array),
@@ -154,7 +153,6 @@ self.onmessage = async (event) => {
 
       return {
         name: mesh.name,
-        color: mesh.color,
         position,
         normal,
         index: indexArray,

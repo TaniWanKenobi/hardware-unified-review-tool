@@ -54,10 +54,6 @@ interface StepSpatialStats {
   extent: THREE.Vector3;
 }
 
-interface LoadGltfOptions {
-  preserveMaterials?: boolean;
-}
-
 const STEP_SIGNATURE_SCALE = 10000;
 const STEP_SIGNATURE_VERTEX_SAMPLES = 96;
 const STEP_SIGNATURE_INDEX_SAMPLES = 192;
@@ -66,107 +62,12 @@ const STEP_COMPARE_INDEX_SAMPLES = 160;
 const STEP_COMPARE_EPSILON = 1 / STEP_SIGNATURE_SCALE;
 const STEP_MIN_INSTANCE_COUNT = 2;
 
-function clampColorChannel(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  if (value <= 1) return Math.round(Math.max(0, value) * 255);
-  return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-function toHexFromRgbChannels(r: number, g: number, b: number): number {
-  const rr = clampColorChannel(r);
-  const gg = clampColorChannel(g);
-  const bb = clampColorChannel(b);
-  return (rr << 16) | (gg << 8) | bb;
-}
-
-function resolveStepColor(value: unknown, fallback: number = 0xc084fc): number {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value >= 0 && value <= 1) {
-      return toHexFromRgbChannels(value, value, value);
-    }
-    if (value >= 0 && value <= 0xffffff) {
-      return Math.round(value) & 0xffffff;
-    }
-  }
-
-  if (Array.isArray(value) && value.length >= 3) {
-    const [r, g, b] = value;
-    if (typeof r === 'number' && typeof g === 'number' && typeof b === 'number') {
-      return toHexFromRgbChannels(r, g, b);
-    }
-  }
-
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const r = record.r ?? record.red ?? record.R;
-    const g = record.g ?? record.green ?? record.G;
-    const b = record.b ?? record.blue ?? record.B;
-
-    if (typeof r === 'number' && typeof g === 'number' && typeof b === 'number') {
-      return toHexFromRgbChannels(r, g, b);
-    }
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.length > 0) {
-      if (trimmed.startsWith('#')) {
-        const parsed = Number.parseInt(trimmed.slice(1), 16);
-        if (Number.isFinite(parsed)) {
-          return parsed & 0xffffff;
-        }
-      }
-
-      if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
-        const parsed = Number.parseInt(trimmed.slice(2), 16);
-        if (Number.isFinite(parsed)) {
-          return parsed & 0xffffff;
-        }
-      }
-
-      const numeric = Number.parseFloat(trimmed);
-      if (Number.isFinite(numeric)) {
-        if (numeric >= 0 && numeric <= 1) {
-          return toHexFromRgbChannels(numeric, numeric, numeric);
-        }
-        if (numeric >= 0 && numeric <= 0xffffff) {
-          return Math.round(numeric) & 0xffffff;
-        }
-      }
-
-      const rgbParts = trimmed
-        .split(/[,\s]+/)
-        .map((part) => Number.parseFloat(part))
-        .filter((part) => Number.isFinite(part));
-      if (rgbParts.length >= 3) {
-        return toHexFromRgbChannels(rgbParts[0], rgbParts[1], rgbParts[2]);
-      }
-    }
-  }
-
-  return fallback;
-}
-
 function freezeStaticTransforms(object: THREE.Object3D): void {
   object.traverse((child) => {
     child.updateMatrix();
     child.matrixAutoUpdate = false;
   });
   object.updateMatrixWorld(true);
-}
-
-function tagOriginalStepColor(
-  material: THREE.Material | THREE.Material[] | null | undefined
-): void {
-  if (!material) return;
-  const materials = Array.isArray(material) ? material : [material];
-
-  for (const entry of materials) {
-    if (!(entry instanceof THREE.MeshStandardMaterial)) continue;
-    if (typeof entry.userData.originalStepColor !== 'number') {
-      entry.userData.originalStepColor = entry.color.getHex();
-    }
-  }
 }
 
 async function readResponseBufferWithProgress(
@@ -239,6 +140,7 @@ export async function loadStepFromServer(
   const params = new URLSearchParams({
     url: file.url,
     preview: options.preview ? '1' : '0',
+    format: 'v3',
   });
 
   const response = await fetch(`/api/step-to-glb?${params.toString()}`, {
@@ -268,7 +170,7 @@ export async function loadStepFromServer(
     return null;
   }
 
-  return loadGLTF(glb, new GLTFLoader(), { preserveMaterials: true });
+  return loadGLTF(glb, new GLTFLoader());
 }
 
 let stlWorker: Worker | null = null;
@@ -549,8 +451,7 @@ async function loadOBJ(
 
 async function loadGLTF(
   content: ArrayBuffer,
-  loader: GLTFLoader,
-  options: LoadGltfOptions = {}
+  loader: GLTFLoader
 ): Promise<{ model: THREE.Group; components: ModelComponent[] }> {
   return new Promise((resolve, reject) => {
     loader.parse(
@@ -563,17 +464,13 @@ async function loadGLTF(
         
         scene.traverse((child) => {
           if (child instanceof THREE.Mesh) {
-            if (!options.preserveMaterials) {
-              // Always set our default purple material unless preserving server-side STEP materials.
-              child.material = new THREE.MeshStandardMaterial({
-                color: 0xc084fc,
-                metalness: 0.1,
-                roughness: 0.7,
-                side: THREE.DoubleSide
-              });
-            } else {
-              tagOriginalStepColor(child.material);
-            }
+            // Always set our default purple material.
+            child.material = new THREE.MeshStandardMaterial({
+              color: 0xc084fc,
+              metalness: 0.1,
+              roughness: 0.7,
+              side: THREE.DoubleSide
+            });
             
             components.push({
               id: `gltf-${idx}`,
@@ -813,6 +710,7 @@ function areStepMeshesInstanceCompatible(
         return false;
       }
     }
+
   }
 
   if (baseMesh.index && candidateMesh.index) {
@@ -908,7 +806,7 @@ async function loadSTEP(
 
     const group = new THREE.Group();
     const components: ModelComponent[] = [];
-    const materialCache = new Map<number, THREE.MeshStandardMaterial>();
+    const materialCache = new Map<string, THREE.MeshStandardMaterial>();
     const preparedMeshes: StepMeshBuildData[] = [];
     const candidateInstanceGroups = new Map<string, StepMeshBuildData[]>();
     const singleMeshes: StepMeshBuildData[] = [];
@@ -916,18 +814,17 @@ async function loadSTEP(
     for (let idx = 0; idx < result.meshes.length; idx++) {
       const meshData = result.meshes[idx];
       try {
-        const color = resolveStepColor(meshData.color, 0xc084fc);
-        let material = materialCache.get(color);
+        const materialKey = 'default';
+        let material = materialCache.get(materialKey);
         if (!material) {
           material = new THREE.MeshStandardMaterial({
-            color,
+            color: 0xc084fc,
             metalness: 0.1,
             roughness: 0.7,
             side: THREE.DoubleSide,
             flatShading: false,
           });
-          material.userData.originalStepColor = color;
-          materialCache.set(color, material);
+          materialCache.set(materialKey, material);
         }
 
         const prepared = createStepMeshBuildData(meshData, idx, material);

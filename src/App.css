@@ -529,65 +529,14 @@
   accent-color: var(--accent);
 }
 
-.step-color-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-}
 
-.step-color-button {
-  all: unset;
-  box-sizing: border-box;
-  padding: 0.3rem 0.55rem;
-  border: 1px solid var(--border);
-  border-radius: 0.3rem;
-  font-size: 0.7rem;
-  color: var(--fg);
-  cursor: pointer;
-}
 
-.step-color-button:hover {
-  border-color: var(--accent);
-  background: rgba(174, 129, 255, 0.12);
-}
 
-.step-color-button.secondary {
-  margin-top: 0.45rem;
-}
 
-.step-color-chip {
-  width: 18px;
-  height: 18px;
-  border-radius: 3px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  display: inline-block;
-}
 
-.step-color-palette {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.35rem;
-}
 
-.step-color-swatch {
-  width: 18px;
-  height: 18px;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  border-radius: 3px;
-  cursor: pointer;
-  padding: 0;
-}
 
-.step-color-swatch.active {
-  outline: 2px solid var(--accent-bright);
-  outline-offset: 1px;
-}
 
-.step-palette-note {
-  margin-top: 0.35rem;
-  font-size: 0.66rem;
-  color: var(--fg-muted);
-}
 
 /* ── Loading overlay ── */
 
@@ -769,3 +718,5 @@
     text-align: center;
   }
 }
+
+

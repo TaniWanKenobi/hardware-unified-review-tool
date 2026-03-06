@@ -18,7 +18,6 @@ type ApiResponse = {
 
 interface StepParseMesh {
   name?: string;
-  color?: unknown;
   attributes?: {
     position?: { array: Float32Array | number[] };
     normal?: { array: Float32Array | number[] };
@@ -77,6 +76,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
 
   const sourceUrl = normalizeSourceUrl(getQueryParam(req.query, 'url'));
   const preview = getQueryParam(req.query, 'preview') === '1';
+  const formatVersion = getQueryParam(req.query, 'format') || 'v1';
 
   if (!sourceUrl) {
     sendJsonError(res, 400, 'Missing query parameter: url');
@@ -88,7 +88,7 @@ export default async function handler(req: ApiRequest, res: ApiResponse) {
     return;
   }
 
-  const cacheKey = createCacheKey(sourceUrl, preview);
+  const cacheKey = createCacheKey(sourceUrl, preview, formatVersion);
   const ifNoneMatch = getIfNoneMatch(req.headers);
   pruneMemoryCache();
 
@@ -172,8 +172,12 @@ function isAllowedSource(value: string): boolean {
   }
 }
 
-function createCacheKey(sourceUrl: string, preview: boolean): string {
-  return sha1Hex(`${sourceUrl}|preview:${preview ? '1' : '0'}|v1`);
+function createCacheKey(
+  sourceUrl: string,
+  preview: boolean,
+  formatVersion: string
+): string {
+  return sha1Hex(`${sourceUrl}|preview:${preview ? '1' : '0'}|format:${formatVersion}`);
 }
 
 function pruneMemoryCache(): void {
@@ -334,87 +338,6 @@ function toUint32Array(source: Uint32Array | number[] | undefined): Uint32Array 
   return new Uint32Array(source);
 }
 
-function clampColorChannel(value: number): number {
-  if (!Number.isFinite(value)) return 0;
-  if (value <= 1) return Math.round(Math.max(0, value) * 255);
-  return Math.max(0, Math.min(255, Math.round(value)));
-}
-
-function toHexFromRgbChannels(r: number, g: number, b: number): number {
-  const rr = clampColorChannel(r);
-  const gg = clampColorChannel(g);
-  const bb = clampColorChannel(b);
-  return (rr << 16) | (gg << 8) | bb;
-}
-
-function resolveStepColor(value: unknown, fallback: number = 0xc084fc): number {
-  if (typeof value === 'number' && Number.isFinite(value)) {
-    if (value >= 0 && value <= 1) {
-      return toHexFromRgbChannels(value, value, value);
-    }
-    if (value >= 0 && value <= 0xffffff) {
-      return Math.round(value) & 0xffffff;
-    }
-  }
-
-  if (Array.isArray(value) && value.length >= 3) {
-    const [r, g, b] = value;
-    if (typeof r === 'number' && typeof g === 'number' && typeof b === 'number') {
-      return toHexFromRgbChannels(r, g, b);
-    }
-  }
-
-  if (value && typeof value === 'object') {
-    const record = value as Record<string, unknown>;
-    const r = record.r ?? record.red ?? record.R;
-    const g = record.g ?? record.green ?? record.G;
-    const b = record.b ?? record.blue ?? record.B;
-
-    if (typeof r === 'number' && typeof g === 'number' && typeof b === 'number') {
-      return toHexFromRgbChannels(r, g, b);
-    }
-  }
-
-  if (typeof value === 'string') {
-    const trimmed = value.trim();
-    if (trimmed.length > 0) {
-      if (trimmed.startsWith('#')) {
-        const parsed = Number.parseInt(trimmed.slice(1), 16);
-        if (Number.isFinite(parsed)) {
-          return parsed & 0xffffff;
-        }
-      }
-
-      if (trimmed.startsWith('0x') || trimmed.startsWith('0X')) {
-        const parsed = Number.parseInt(trimmed.slice(2), 16);
-        if (Number.isFinite(parsed)) {
-          return parsed & 0xffffff;
-        }
-      }
-
-      const numeric = Number.parseFloat(trimmed);
-      if (Number.isFinite(numeric)) {
-        if (numeric >= 0 && numeric <= 1) {
-          return toHexFromRgbChannels(numeric, numeric, numeric);
-        }
-        if (numeric >= 0 && numeric <= 0xffffff) {
-          return Math.round(numeric) & 0xffffff;
-        }
-      }
-
-      const rgbParts = trimmed
-        .split(/[,\s]+/)
-        .map((part) => Number.parseFloat(part))
-        .filter((part) => Number.isFinite(part));
-      if (rgbParts.length >= 3) {
-        return toHexFromRgbChannels(rgbParts[0], rgbParts[1], rgbParts[2]);
-      }
-    }
-  }
-
-  return fallback;
-}
-
 function decimateIndexed(indexArray: Uint32Array, step: number): Uint32Array {
   if (step <= 1) return indexArray;
 
@@ -477,7 +400,6 @@ async function convertStepToGlb(stepBytes: Buffer, preview: boolean): Promise<Bu
 
   const rawMeshes = parseResult.meshes.map((mesh, index) => ({
     name: mesh.name || `Part ${index + 1}`,
-    color: mesh.color,
     position: toFloat32Array(mesh.attributes?.position?.array),
     normal: toFloat32Array(mesh.attributes?.normal?.array),
     index: toUint32Array(mesh.index?.array),
@@ -495,7 +417,7 @@ async function convertStepToGlb(stepBytes: Buffer, preview: boolean): Promise<Bu
       : 1;
 
   const scene = new THREE.Scene();
-  const materialCache = new Map<number, THREE.MeshStandardMaterial>();
+  const materialCache = new Map<string, THREE.MeshStandardMaterial>();
 
   for (const mesh of rawMeshes) {
     let position = mesh.position;
@@ -524,16 +446,16 @@ async function convertStepToGlb(stepBytes: Buffer, preview: boolean): Promise<Bu
       geometry.setIndex(new THREE.BufferAttribute(index, 1));
     }
 
-    const color = resolveStepColor(mesh.color, 0xc084fc);
-    let material = materialCache.get(color);
+    const materialKey = 'default';
+    let material = materialCache.get(materialKey);
     if (!material) {
       material = new THREE.MeshStandardMaterial({
-        color,
+        color: 0xc084fc,
         metalness: preview ? 0.05 : 0.1,
         roughness: preview ? 0.9 : 0.7,
         side: THREE.DoubleSide,
       });
-      materialCache.set(color, material);
+      materialCache.set(materialKey, material);
     }
 
     const object = new THREE.Mesh(geometry, material);
