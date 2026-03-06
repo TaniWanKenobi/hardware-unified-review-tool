@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
+} from 'react';
 import type { EasyEdaVisualDocument, EasyEdaVisualPrimitive } from '../utils/easyedaVisual';
 
 interface EasyEdaCanvasViewProps {
@@ -59,7 +67,7 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
   );
 
   const handleWheel = useCallback(
-    (event: React.WheelEvent<SVGSVGElement>) => {
+    (event: ReactWheelEvent<SVGSVGElement>) => {
       event.preventDefault();
       const svg = svgRef.current;
       if (!svg) return;
@@ -92,7 +100,7 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
     [document.bounds.width]
   );
 
-  const handlePointerDown = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
     const svg = svgRef.current;
     if (!svg) return;
@@ -107,7 +115,7 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
     setIsPanning(true);
   }, [viewBox]);
 
-  const handlePointerMove = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerMove = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
     const panState = panStateRef.current;
     const svg = svgRef.current;
     if (!panState || !svg || panState.pointerId !== event.pointerId) return;
@@ -128,7 +136,7 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
     });
   }, []);
 
-  const handlePointerUp = useCallback((event: React.PointerEvent<SVGSVGElement>) => {
+  const handlePointerUp = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
     const panState = panStateRef.current;
     if (!panState || panState.pointerId !== event.pointerId) return;
     panStateRef.current = null;

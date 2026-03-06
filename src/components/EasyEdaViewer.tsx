@@ -3,18 +3,23 @@ import type { EasyEdaFileData } from '../store/useStore';
 import { fetchFileContent } from '../utils/github';
 import {
   analyzeEasyEdaJson,
+  extractPrimaryEasyEdaArchiveJsonDocument,
   inspectEasyEdaArchive,
   tryParseJsonContent,
   type EasyEdaArchiveInspection,
   type EasyEdaDocumentKind,
   type EasyEdaJsonInspection,
 } from '../utils/easyeda';
+import { buildEasyEdaVisualDocument, type EasyEdaVisualDocument } from '../utils/easyedaVisual';
+import EasyEdaCanvasView from './EasyEdaCanvasView';
 
 type EasyEdaReadResult =
   | {
       mode: 'json';
       sourceLabel: string;
+      sourceEntry: string | null;
       inspection: EasyEdaJsonInspection;
+      visualDocument: EasyEdaVisualDocument | null;
       preview: string;
       truncated: boolean;
     }
@@ -74,6 +79,23 @@ export default function EasyEdaViewer({ file }: { file: EasyEdaFileData }) {
           return;
         }
 
+        const archiveDocument = await extractPrimaryEasyEdaArchiveJsonDocument(content);
+        if (cancelled) return;
+
+        if (archiveDocument) {
+          setState({
+            status: 'ready',
+            result: buildJsonResult(
+              archiveDocument.value,
+              archiveDocument.name,
+              `${archiveFormat} archive`,
+              archiveDocument.text,
+              archiveDocument.name
+            ),
+          });
+          return;
+        }
+
         const archiveInspection = await inspectEasyEdaArchive(content);
         if (cancelled) return;
 
@@ -123,28 +145,60 @@ export default function EasyEdaViewer({ file }: { file: EasyEdaFileData }) {
   const result = state.result;
   if (result.mode === 'json') {
     return (
-      <div className="easyeda-viewer">
+      <div className={`easyeda-viewer ${result.visualDocument ? 'easyeda-visual' : 'easyeda-archive'}`}>
         <div className="easyeda-summary">
           <h3>{file.name}</h3>
           <p>
-            Source: <strong>{result.sourceLabel}</strong> | Detected document:{' '}
+            Source: <strong>{result.sourceLabel}</strong>
+            {result.sourceEntry && (
+              <>
+                {' '}
+                | Entry: <strong>{result.sourceEntry}</strong>
+              </>
+            )}{' '}
+            | Detected document:{' '}
             <strong>{formatDocumentKind(result.inspection.documentKind)}</strong>
           </p>
           <p>
             EasyEDA signature:{' '}
             <strong>{result.inspection.isEasyEda ? 'Likely' : 'Not detected'}</strong>
           </p>
+          {result.visualDocument && (
+            <p>
+              Rendered primitives: <strong>{result.visualDocument.primitives.length}</strong> (from{' '}
+              <strong>{result.visualDocument.shapeCount}</strong> shape rows)
+            </p>
+          )}
+          {result.visualDocument && result.visualDocument.unknownShapePrefixes.length > 0 && (
+            <p className="easyeda-muted">
+              Unhandled shape types:{' '}
+              {result.visualDocument.unknownShapePrefixes.slice(0, 8).join(', ')}
+              {result.visualDocument.unknownShapePrefixes.length > 8 ? ', ...' : ''}
+            </p>
+          )}
           {result.inspection.topLevelKeys.length > 0 && (
             <p className="easyeda-muted">
               Top-level keys: {result.inspection.topLevelKeys.slice(0, 18).join(', ')}
             </p>
           )}
         </div>
-        <pre className="easyeda-json-preview">{result.preview}</pre>
-        {result.truncated && (
-          <p className="easyeda-muted">
-            JSON preview truncated to {JSON_PREVIEW_LIMIT.toLocaleString()} characters.
-          </p>
+        {result.visualDocument ? (
+          <>
+            <EasyEdaCanvasView document={result.visualDocument} />
+            <details className="easyeda-json-details">
+              <summary>Raw JSON</summary>
+              <pre className="easyeda-json-preview">{result.preview}</pre>
+            </details>
+          </>
+        ) : (
+          <>
+            <pre className="easyeda-json-preview">{result.preview}</pre>
+            {result.truncated && (
+              <p className="easyeda-muted">
+                JSON preview truncated to {JSON_PREVIEW_LIMIT.toLocaleString()} characters.
+              </p>
+            )}
+          </>
         )}
       </div>
     );
@@ -155,7 +209,7 @@ export default function EasyEdaViewer({ file }: { file: EasyEdaFileData }) {
   const displayedEntries = entries.slice(0, ARCHIVE_ENTRY_PREVIEW_LIMIT);
 
   return (
-    <div className="easyeda-viewer">
+    <div className="easyeda-viewer easyeda-archive">
       <div className="easyeda-summary">
         <h3>{file.name}</h3>
         <p>
@@ -207,7 +261,8 @@ function buildJsonResult(
   value: unknown,
   filename: string,
   sourceLabel: string,
-  sourceText?: string
+  sourceText?: string,
+  sourceEntry: string | null = null
 ): EasyEdaReadResult {
   const inspection = analyzeEasyEdaJson(value, filename);
   const previewSource = sourceText ?? JSON.stringify(value, null, 2);
@@ -215,11 +270,14 @@ function buildJsonResult(
   const preview = truncated
     ? `${previewSource.slice(0, JSON_PREVIEW_LIMIT)}\n...`
     : previewSource;
+  const visualDocument = buildEasyEdaVisualDocument(value, filename, inspection.documentKind);
 
   return {
     mode: 'json',
     sourceLabel,
+    sourceEntry,
     inspection,
+    visualDocument,
     preview,
     truncated,
   };

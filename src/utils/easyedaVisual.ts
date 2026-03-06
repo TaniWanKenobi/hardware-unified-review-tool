@@ -153,11 +153,56 @@ function resolvePrimaryDocument(source: unknown): Record<string, unknown> | null
     return record;
   }
 
+  // EasyEDA project files nest schematics in various ways
   const schematics = Array.isArray(record.schematics) ? record.schematics : [];
   for (const schematic of schematics) {
     const nested = asRecord(schematic);
-    if (nested && Array.isArray(nested.shape)) {
+    if (!nested) continue;
+
+    // Direct shape array on the schematic entry
+    if (Array.isArray(nested.shape)) {
       return nested;
+    }
+
+    // dataStr: stringified JSON containing the actual schematic data
+    if (typeof nested.dataStr === 'string') {
+      try {
+        const parsed = asRecord(JSON.parse(nested.dataStr));
+        if (parsed && Array.isArray(parsed.shape)) {
+          return parsed;
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    // dataStr: already-parsed object (some EasyEDA versions embed it directly)
+    const schDataStr = asRecord(nested.dataStr);
+    if (schDataStr && Array.isArray(schDataStr.shape)) {
+      return schDataStr;
+    }
+  }
+
+  // Also check pcbs array for PCB data in project files
+  const pcbs = Array.isArray(record.pcbs) ? record.pcbs : [];
+  for (const pcb of pcbs) {
+    const nested = asRecord(pcb);
+    if (!nested) continue;
+
+    if (Array.isArray(nested.shape)) {
+      return nested;
+    }
+
+    if (typeof nested.dataStr === 'string') {
+      try {
+        const parsed = asRecord(JSON.parse(nested.dataStr));
+        if (parsed && Array.isArray(parsed.shape)) {
+          return parsed;
+        }
+      } catch { /* ignore parse errors */ }
+    }
+
+    const pcbDataStr = asRecord(nested.dataStr);
+    if (pcbDataStr && Array.isArray(pcbDataStr.shape)) {
+      return pcbDataStr;
     }
   }
 
@@ -375,41 +420,56 @@ function parseShapeLine(
     case 'W':
     case 'PL':
     case 'PG': {
-      const points = parsePoints(tokens[1] ?? '');
+      // Standard schematic: PL~points~color~width~...  (tilde-separated, parts[0] is just the prefix)
+      // PCB format: PL_points_color_width  (underscore-separated within parts[0])
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      const pointsStr = isStdSch ? parts[1] ?? '' : tokens[1] ?? '';
+      const colorStr = isStdSch ? parts[2] : tokens[2];
+      const widthStr = isStdSch ? parts[3] : tokens[3];
+      const fillStr = isStdSch ? parts[5] : tokens[5];
+      const points = parsePoints(pointsStr);
       if (points.length < 2) return [];
       return [
         {
           kind: 'polyline',
           points,
           closed: prefix === 'PG',
-          stroke: normalizeColor(tokens[2], defaultStroke) ?? defaultStroke,
-          strokeWidth: positiveNumber(tokens[3], 1),
-          fill: prefix === 'PG' ? normalizeColor(tokens[5], null) : null,
+          stroke: normalizeColor(colorStr, defaultStroke) ?? defaultStroke,
+          strokeWidth: positiveNumber(widthStr, 1),
+          fill: prefix === 'PG' ? normalizeColor(fillStr, null) : null,
           opacity: 1,
         },
       ];
     }
     case 'PT':
     case 'A': {
-      const path = tokens[1] ?? '';
+      // Standard schematic: PT~pathdata~color~width~...  or  A~pathdata~color~width~...
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      const path = isStdSch ? parts[1] ?? '' : tokens[1] ?? '';
       if (!path.trim()) return [];
+      const colorStr = isStdSch ? parts[2] : tokens[2];
+      const widthStr = isStdSch ? parts[3] : tokens[3];
+      const fillStr = isStdSch ? parts[5] : tokens[5];
       return [
         {
           kind: 'path',
           path,
-          stroke: normalizeColor(tokens[2], defaultStroke) ?? defaultStroke,
-          strokeWidth: positiveNumber(tokens[3], 1),
-          fill: normalizeColor(tokens[5], null),
+          stroke: normalizeColor(colorStr, defaultStroke) ?? defaultStroke,
+          strokeWidth: positiveNumber(widthStr, 1),
+          fill: normalizeColor(fillStr, null),
           opacity: 1,
         },
       ];
     }
     case 'R': {
+      // Standard schematic: R~x~y~rx~ry~width~height~color~strokeWidth~...~fill
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      const f = isStdSch ? parts : tokens;
       const normalized = normalizeRect(
-        number(tokens[1], 0),
-        number(tokens[2], 0),
-        number(tokens[5], 0),
-        number(tokens[6], 0)
+        number(f[1], 0),
+        number(f[2], 0),
+        number(f[5], 0),
+        number(f[6], 0)
       );
       if (normalized.width <= 0 || normalized.height <= 0) return [];
       return [
@@ -419,21 +479,23 @@ function parseShapeLine(
           y: normalized.y,
           width: normalized.width,
           height: normalized.height,
-          rx: Math.abs(number(tokens[3], 0)),
-          ry: Math.abs(number(tokens[4], 0)),
+          rx: Math.abs(number(f[3], 0)),
+          ry: Math.abs(number(f[4], 0)),
           rotation: 0,
-          stroke: normalizeColor(tokens[7], defaultStroke) ?? defaultStroke,
-          strokeWidth: positiveNumber(tokens[8], 1),
-          fill: normalizeColor(tokens[10], null),
+          stroke: normalizeColor(f[7], defaultStroke) ?? defaultStroke,
+          strokeWidth: positiveNumber(f[8], 1),
+          fill: normalizeColor(f[10], null),
           opacity: 1,
         },
       ];
     }
     case 'E': {
-      const cx = number(tokens[1], 0);
-      const cy = number(tokens[2], 0);
-      const rx = Math.abs(number(tokens[3], 0));
-      const ry = Math.abs(number(tokens[4], rx));
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      const f = isStdSch ? parts : tokens;
+      const cx = number(f[1], 0);
+      const cy = number(f[2], 0);
+      const rx = Math.abs(number(f[3], 0));
+      const ry = Math.abs(number(f[4], rx));
       if (rx <= 0 || ry <= 0) return [];
       return [
         {
@@ -445,38 +507,63 @@ function parseShapeLine(
           rx,
           ry,
           rotation: 0,
-          stroke: normalizeColor(tokens[5], defaultStroke) ?? defaultStroke,
-          strokeWidth: positiveNumber(tokens[6], 1),
-          fill: normalizeColor(tokens[8], null),
+          stroke: normalizeColor(f[5], defaultStroke) ?? defaultStroke,
+          strokeWidth: positiveNumber(f[6], 1),
+          fill: normalizeColor(f[8], null),
           opacity: 1,
         },
       ];
     }
     case 'T':
     case 'N': {
+      // Standard schematic T: T~displayFlag~x~y~rotation~color~fontFamily~fontSize~...~anchor~text~...
+      // PCB T: parts[0] = T_..._..._... with underscore tokens
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      if (isStdSch) {
+        // Standard schematic text: T~displayFlag~x~y~rotation~color~fontFamily~fontSize~~~~anchor~text~visible~alignment~id~...
+        const displayFlag = (parts[1] ?? '').toUpperCase();
+        if (displayFlag === 'H' || displayFlag === 'HIDE') return [];
+        const text = decodeEasyEdaText(parts[12] ?? '');
+        if (!text) return [];
+        return [
+          {
+            kind: 'text',
+            x: number(parts[2], 0),
+            y: number(parts[3], 0),
+            text,
+            size: positiveNumber(parts[7], 7),
+            rotation: number(parts[4], 0),
+            fill: normalizeColor(parts[5], defaultStroke) ?? defaultStroke,
+            opacity: 0.95,
+            anchor: inferTextAnchor(parts[13] ?? 'start'),
+          },
+        ];
+      }
       const text = decodeEasyEdaText(prefix === 'N' ? tokens[4] ?? '' : tokens[8] ?? '');
       if (!text) return [];
+      const isNetLabel = prefix === 'N';
       return [
         {
           kind: 'text',
-          x: number(tokens[1] ?? tokens[2], 0),
-          y: number(tokens[2] ?? tokens[3], 0),
+          x: number(isNetLabel ? tokens[1] : tokens[2], 0),
+          y: number(isNetLabel ? tokens[2] : tokens[3], 0),
           text,
-          size: positiveNumber(prefix === 'N' ? parts[1] : tokens[7], 7),
-          rotation: number(tokens[3] ?? tokens[4], 0),
+          size: positiveNumber(isNetLabel ? parts[1] : tokens[7], 7),
+          rotation: number(isNetLabel ? tokens[3] : tokens[4], 0),
           fill: normalizeColor(tokens[5], defaultStroke) ?? defaultStroke,
           opacity: 0.95,
-          anchor: prefix === 'N' ? 'middle' : inferTextAnchor(parts[2] ?? 'start'),
+          anchor: isNetLabel ? 'middle' : inferTextAnchor(parts[2] ?? 'start'),
         },
       ];
     }
     case 'J': {
-      const diameter = positiveNumber(parts[1], 3);
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      const diameter = positiveNumber(isStdSch ? parts[3] : parts[1], 3);
       return [
         {
           kind: 'circle',
-          cx: number(tokens[1], 0),
-          cy: number(tokens[2], 0),
+          cx: number(isStdSch ? parts[1] : tokens[1], 0),
+          cy: number(isStdSch ? parts[2] : tokens[2], 0),
           r: diameter / 2,
           stroke: defaultStroke,
           strokeWidth: 0.6,
@@ -486,8 +573,9 @@ function parseShapeLine(
       ];
     }
     case 'O': {
-      const x = number(tokens[1], 0);
-      const y = number(tokens[2], 0);
+      const isStdSch = tokens.length <= 1 && parts.length > 1;
+      const x = number(isStdSch ? parts[1] : tokens[1], 0);
+      const y = number(isStdSch ? parts[2] : tokens[2], 0);
       const size = 3;
       return [
         {

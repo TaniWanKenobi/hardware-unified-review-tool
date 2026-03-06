@@ -22,6 +22,13 @@ export interface EasyEdaArchiveInspection {
   unsupportedEntries: number;
 }
 
+export interface EasyEdaArchiveJsonDocument {
+  name: string;
+  text: string;
+  value: unknown;
+  inspection: EasyEdaJsonInspection;
+}
+
 interface ParsedJsonContent {
   value: unknown;
   text: string;
@@ -289,6 +296,57 @@ export async function inspectEasyEdaArchive(
     skippedJsonEntries,
     unsupportedEntries,
   };
+}
+
+export async function extractPrimaryEasyEdaArchiveJsonDocument(
+  content: ArrayBuffer
+): Promise<EasyEdaArchiveJsonDocument | null> {
+  const entries = parseZipEntries(content);
+  const contentBytes = new Uint8Array(content);
+
+  const jsonCandidates = entries
+    .filter((entry) => !entry.name.endsWith('/') && entry.name.toLowerCase().endsWith('.json'))
+    .sort((a, b) => rankEasyEdaName(b.name) - rankEasyEdaName(a.name))
+    .slice(0, MAX_ARCHIVE_JSON_SCAN_ENTRIES);
+
+  let fallback: EasyEdaArchiveJsonDocument | null = null;
+
+  for (const entry of jsonCandidates) {
+    const compression = mapCompressionMethod(entry.method);
+    if (
+      compression === 'unsupported' ||
+      entry.uncompressedSize > MAX_ARCHIVE_JSON_SCAN_SIZE ||
+      entry.uncompressedSize < 0
+    ) {
+      continue;
+    }
+
+    try {
+      const entryData = await extractZipEntryData(contentBytes, entry);
+      const parsed = tryParseJsonContent(toArrayBuffer(entryData));
+      if (!parsed) continue;
+
+      const inspection = analyzeEasyEdaJson(parsed.value, entry.name);
+      const candidate: EasyEdaArchiveJsonDocument = {
+        name: entry.name,
+        text: parsed.text,
+        value: parsed.value,
+        inspection,
+      };
+
+      if (!fallback) {
+        fallback = candidate;
+      }
+
+      if (inspection.isEasyEda) {
+        return candidate;
+      }
+    } catch {
+      // Ignore malformed archive entries and continue scanning.
+    }
+  }
+
+  return fallback;
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
