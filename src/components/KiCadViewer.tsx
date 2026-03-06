@@ -93,14 +93,14 @@ export default function KiCadViewer({ fileUrl, fileName, resolverMap }: KiCadVie
     );
   }
 
-  if (!ready || loading) {
-    return (
-      <div className="kicad-viewer-loading">
-        <div className="spinner"></div>
-        <p>Loading KiCad viewer…</p>
-      </div>
-    );
-  }
-
-  return <div ref={containerRef} className="kicad-viewer" />;
+  return (
+    <div ref={containerRef} className="kicad-viewer">
+      {(!ready || loading) && (
+        <div className="kicad-viewer-loading">
+          <div className="spinner"></div>
+          <p>Loading KiCad viewer…</p>
+        </div>
+      )}
+    </div>
+  );
 }

@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
   type PointerEvent as ReactPointerEvent,
-  type WheelEvent as ReactWheelEvent,
 } from 'react';
 import type { EasyEdaVisualDocument, EasyEdaVisualPrimitive } from '../utils/easyedaVisual';
 
@@ -66,11 +65,12 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
     [document.bounds.width]
   );
 
-  const handleWheel = useCallback(
-    (event: ReactWheelEvent<SVGSVGElement>) => {
+  useEffect(() => {
+    const svg = svgRef.current;
+    if (!svg) return;
+
+    const handleWheel = (event: WheelEvent) => {
       event.preventDefault();
-      const svg = svgRef.current;
-      if (!svg) return;
 
       const rect = svg.getBoundingClientRect();
       if (rect.width <= 0 || rect.height <= 0) return;
@@ -96,9 +96,11 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
           height: nextHeight,
         };
       });
-    },
-    [document.bounds.width]
-  );
+    };
+
+    svg.addEventListener('wheel', handleWheel, { passive: false });
+    return () => svg.removeEventListener('wheel', handleWheel);
+  }, [document.bounds.width]);
 
   const handlePointerDown = useCallback((event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
@@ -169,7 +171,7 @@ export default function EasyEdaCanvasView({ document }: EasyEdaCanvasViewProps) 
           onPointerMove={handlePointerMove}
           onPointerUp={handlePointerUp}
           onPointerCancel={handlePointerUp}
-          onWheel={handleWheel}
+
         >
           <rect
             x={document.bounds.minX}
@@ -277,7 +279,7 @@ function renderPrimitive(primitive: EasyEdaVisualPrimitive, index: number) {
       x={primitive.x}
       y={primitive.y}
       transform={transform}
-      fill={primitive.fill}
+      fill="#a0b6e8"
       opacity={primitive.opacity}
       fontSize={primitive.size}
       textAnchor={primitive.anchor}
