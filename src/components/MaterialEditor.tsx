@@ -29,10 +29,7 @@ export default function MaterialEditor() {
       : null;
   const selectedMaterials = selectedMesh ? getEditableMaterials(selectedMesh) : [];
   const material = selectedMaterials[0] ?? null;
-
-  if (!selectedMesh || !material || selectedMaterials.length === 0) {
-    return null;
-  }
+  const canEditMaterial = Boolean(selectedMesh && material && selectedMaterials.length > 0);
 
   const triggerUpdate = () => {
     forceUpdate({});
@@ -89,7 +86,7 @@ export default function MaterialEditor() {
     triggerUpdate();
   };
 
-  const colorHex = `#${material.color.getHexString()}`;
+  const colorHex = material ? `#${material.color.getHexString()}` : '#ffffff';
 
   return (
     <div className="material-editor">
@@ -101,72 +98,86 @@ export default function MaterialEditor() {
 
       {isOpen && (
         <div className="material-controls">
-          <div className="material-section">
-            <label>Color</label>
-            <input
-              type="color"
-              value={colorHex}
-              onChange={(event) => handleColorChange(event.target.value)}
-            />
-          </div>
+          {canEditMaterial ? (
+            <>
+              <div className="material-section">
+                <label>Color</label>
+                <input
+                  type="color"
+                  value={colorHex}
+                  title="Material color"
+                  aria-label="Material color"
+                  onChange={(event) => handleColorChange(event.target.value)}
+                />
+              </div>
 
-          <div className="material-section">
-            <label>Metalness: {material.metalness.toFixed(2)}</label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={material.metalness}
-              onChange={(event) => handleMetalnessChange(parseFloat(event.target.value))}
-            />
-          </div>
+              <div className="material-section">
+                <label>Metalness: {material.metalness.toFixed(2)}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={material.metalness}
+                  title="Material metalness"
+                  aria-label="Material metalness"
+                  onChange={(event) => handleMetalnessChange(parseFloat(event.target.value))}
+                />
+              </div>
 
-          <div className="material-section">
-            <label>Roughness: {material.roughness.toFixed(2)}</label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={material.roughness}
-              onChange={(event) => handleRoughnessChange(parseFloat(event.target.value))}
-            />
-          </div>
+              <div className="material-section">
+                <label>Roughness: {material.roughness.toFixed(2)}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={material.roughness}
+                  title="Material roughness"
+                  aria-label="Material roughness"
+                  onChange={(event) => handleRoughnessChange(parseFloat(event.target.value))}
+                />
+              </div>
 
-          <div className="material-section">
-            <label>Opacity: {material.opacity.toFixed(2)}</label>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.01"
-              value={material.opacity}
-              onChange={(event) => handleOpacityChange(parseFloat(event.target.value))}
-            />
-          </div>
+              <div className="material-section">
+                <label>Opacity: {material.opacity.toFixed(2)}</label>
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={material.opacity}
+                  title="Material opacity"
+                  aria-label="Material opacity"
+                  onChange={(event) => handleOpacityChange(parseFloat(event.target.value))}
+                />
+              </div>
 
-          <div className="material-section">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={material.wireframe}
-                onChange={handleWireframeToggle}
-              />
-              Wireframe Mode
-            </label>
-          </div>
+              <div className="material-section">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={material.wireframe}
+                    onChange={handleWireframeToggle}
+                  />
+                  Wireframe Mode
+                </label>
+              </div>
 
-          <div className="material-section">
-            <label className="checkbox-label">
-              <input
-                type="checkbox"
-                checked={material.flatShading}
-                onChange={handleFlatShadingToggle}
-              />
-              Flat Shading
-            </label>
-          </div>
+              <div className="material-section">
+                <label className="checkbox-label">
+                  <input
+                    type="checkbox"
+                    checked={material.flatShading}
+                    onChange={handleFlatShadingToggle}
+                  />
+                  Flat Shading
+                </label>
+              </div>
+            </>
+          ) : (
+            <p className="material-empty-hint">Select a mesh in the component list or viewport to edit material.</p>
+          )}
 
           <div className="material-section">
             <label className="checkbox-label">
